@@ -16,6 +16,7 @@ use {
             TryStreamExt as _,
         },
     },
+    percent_encoding::percent_decode_str,
     rand::prelude::*,
     tokio::io::{
         self,
@@ -44,7 +45,7 @@ fn get_tracks(mut path: PathBuf) -> Pin<Box<dyn Stream<Item = Result<PathBuf, Er
                 .map_err(Error::from)
                 .map_ok(|line| line.trim().to_owned())
                 .try_filter(|line| future::ready(!line.is_empty() && !line.starts_with('#')))
-                .and_then(|line| future::ok(get_tracks(PathBuf::from(line))))
+                .and_then(|line| async move { Ok(get_tracks(PathBuf::from(percent_decode_str(&line).decode_utf8()?.into_owned()))) })
                 .try_flatten()
                 .boxed()
         } else {
@@ -64,13 +65,14 @@ enum Args {
 enum Error {
     #[error(transparent)] Io(#[from] io::Error),
     #[error(transparent)] Mpd(#[from] async_mpd::Error),
+    #[error(transparent)] Utf8(#[from] std::str::Utf8Error),
     #[error(transparent)] Wheel(#[from] wheel::Error),
     #[error("could not determine user folder")]
     MissingHomeDir,
     #[error("could not determine music folder")]
     MissingMusicDir,
     #[error("non-UTF-8 track path")]
-    Utf8,
+    NonUtf8TrackPath,
 }
 
 #[wheel::main]
@@ -82,7 +84,7 @@ async fn main(args: Args) -> Result<(), Error> {
             let mut tracks = get_tracks(path).try_collect::<Vec<_>>().await?;
             tracks.shuffle(&mut thread_rng());
             for track in tracks {
-                mpc.queue_add(track.to_str().ok_or(Error::Utf8)?).await?;
+                mpc.queue_add(track.to_str().ok_or(Error::NonUtf8TrackPath)?).await?;
             }
         }
     }

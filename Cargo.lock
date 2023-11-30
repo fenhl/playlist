@@ -748,6 +748,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bb813b8af86854136c6922af0598d719255ecb2179515e6e7730d468f05c9cae"
 
 [[package]]
+name = "percent-encoding"
+version = "2.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
+
+[[package]]
 name = "pin-project-lite"
 version = "0.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -772,12 +778,13 @@ dependencies = [
 
 [[package]]
 name = "playlist"
-version = "0.1.0"
+version = "2.0.0"
 dependencies = [
  "async-mpd",
  "clap",
  "directories",
  "futures",
+ "percent-encoding",
  "rand",
  "thiserror",
  "tokio",
