@@ -30,18 +30,20 @@ use {
     },
 };
 
-fn get_tracks(mut path: PathBuf) -> Pin<Box<dyn Stream<Item = Result<PathBuf, Error>> + Send>> {
+fn get_tracks(path: PathBuf) -> Pin<Box<dyn Stream<Item = Result<PathBuf, Error>> + Send>> {
     stream::once(async move {
-        if path.is_relative() {
-            path = match env::var_os("MPD_ROOT") {
-                Some(mpd_root) => PathBuf::from(mpd_root).join(path),
-                None => UserDirs::new().ok_or(Error::MissingHomeDir)?.audio_dir().ok_or(Error::MissingMusicDir)?.join(path),
-            };
-        }
-        Ok::<_, Error>(if fs::metadata(&path).await?.is_dir() {
-            fs::read_dir(path).and_then(|entry| future::ok(get_tracks(entry.path()))).try_flatten().boxed()
-        } else if path.extension().is_some_and(|ext| ext == "m3u8") {
-            LinesStream::new(BufReader::new(File::open(path).await?).lines())
+        let absolute_path = if path.is_relative() {
+            match env::var_os("MPD_ROOT") {
+                Some(mpd_root) => PathBuf::from(mpd_root).join(&path),
+                None => UserDirs::new().ok_or(Error::MissingHomeDir)?.audio_dir().ok_or(Error::MissingMusicDir)?.join(&path),
+            }
+        } else {
+            path.clone()
+        };
+        Ok::<_, Error>(if fs::metadata(&absolute_path).await?.is_dir() {
+            fs::read_dir(absolute_path).and_then(|entry| future::ok(get_tracks(entry.path()))).try_flatten().boxed()
+        } else if absolute_path.extension().is_some_and(|ext| ext == "m3u8") {
+            LinesStream::new(BufReader::new(File::open(absolute_path).await?).lines())
                 .map_err(Error::from)
                 .map_ok(|line| line.trim().to_owned())
                 .try_filter(|line| future::ready(!line.is_empty() && !line.starts_with('#')))
