@@ -27,4 +27,4 @@ rand = "0.8.5"
 thiserror = "1.0.50"
 tokio = { version = "1.34.0", features = ["io-util"] }
 tokio-stream = { version = "0.1.14", features = ["io-util"] }
-wheel = { git = "https://github.com/fenhl/wheel", branch = "main", version = "0.13.0" }
+wheel = { git = "https://github.com/fenhl/wheel", branch = "main" }

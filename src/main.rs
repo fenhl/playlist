@@ -61,6 +61,7 @@ enum Args {
     AddShuffled {
         path: PathBuf,
     },
+    List,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -89,6 +90,9 @@ async fn main(args: Args) -> Result<(), Error> {
                 mpc.queue_add(track.to_str().ok_or(Error::NonUtf8TrackPath)?).await?;
             }
         }
+        Args::List => for track in mpc.queue().await? {
+            println!("{}", track.file);
+        },
     }
     Ok(())
 }
