@@ -57,7 +57,13 @@ fn get_tracks(path: PathBuf) -> Pin<Box<dyn Stream<Item = Result<PathBuf, Error>
 }
 
 #[derive(clap::Parser)]
-enum Args {
+struct Args {
+    #[clap(subcommand)]
+    subcommand: Option<Subcommand>,
+}
+
+#[derive(clap::Subcommand)]
+enum Subcommand {
     AddShuffled {
         path: PathBuf,
     },
@@ -79,18 +85,18 @@ enum Error {
 }
 
 #[wheel::main]
-async fn main(args: Args) -> Result<(), Error> {
+async fn main(Args { subcommand }: Args) -> Result<(), Error> {
     let mut mpc = MpdClient::new();
     mpc.connect((Ipv6Addr::LOCALHOST, 6600)).await?;
-    match args {
-        Args::AddShuffled { path } => {
+    match subcommand {
+        Some(Subcommand::AddShuffled { path }) => {
             let mut tracks = get_tracks(path).try_collect::<Vec<_>>().await?;
             tracks.shuffle(&mut thread_rng());
             for track in tracks {
                 mpc.queue_add(track.to_str().ok_or(Error::NonUtf8TrackPath)?).await?;
             }
         }
-        Args::List => for track in mpc.queue().await? {
+        None | Some(Subcommand::List) => for track in mpc.queue().await? {
             println!("{}", track.file);
         },
     }
