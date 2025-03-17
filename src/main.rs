@@ -17,7 +17,10 @@ use {
         },
     },
     percent_encoding::percent_decode_str,
-    rand::prelude::*,
+    rand::{
+        prelude::*,
+        rng,
+    },
     tokio::io::{
         self,
         AsyncBufReadExt as _,
@@ -91,7 +94,7 @@ async fn main(Args { subcommand }: Args) -> Result<(), Error> {
     match subcommand {
         Some(Subcommand::AddShuffled { path }) => {
             let mut tracks = get_tracks(path).try_collect::<Vec<_>>().await?;
-            tracks.shuffle(&mut thread_rng());
+            tracks.shuffle(&mut rng());
             for track in tracks {
                 mpc.queue_add(track.to_str().ok_or(Error::NonUtf8TrackPath)?).await?;
             }
