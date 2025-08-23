@@ -23,7 +23,9 @@ async-mpd = "0.6.0"
 clap = { version = "4.4.9", features = ["derive"] }
 directories = "6"
 futures = "0.3.29"
+log-lock = { git = "https://github.com/fenhl/log-lock", branch = "main", version = "0.2.5" }
 mimalloc = "0.1.43"
+path-slash = "0.2.1"
 percent-encoding = "2.3.1"
 rand = "0.9"
 thiserror = "2"
