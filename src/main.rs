@@ -10,6 +10,10 @@ use {
         sync::Arc,
     },
     async_mpd::MpdClient,
+    clap_complete::engine::{
+        ArgValueCompleter,
+        PathCompleter,
+    },
     directories::UserDirs,
     futures::{
         future,
@@ -39,15 +43,19 @@ use {
     },
 };
 
+fn get_mpd_root() -> Result<PathBuf, Error> {
+    Ok(match env::var_os("MPD_ROOT") {
+        Some(mpd_root) => PathBuf::from(mpd_root),
+        None => UserDirs::new().ok_or(Error::MissingHomeDir)?.audio_dir().ok_or(Error::MissingMusicDir)?.to_owned(),
+    })
+}
+
 fn get_tracks(mpd_root: Arc<Mutex<Option<PathBuf>>>, path: PathBuf) -> Pin<Box<dyn Stream<Item = Result<PathBuf, Error>> + Send>> {
     stream::once(async move {
         let absolute_path = if path.is_relative() {
             lock!(mpd_root = mpd_root; {
                 if mpd_root.is_none() {
-                    *mpd_root = Some(match env::var_os("MPD_ROOT") {
-                        Some(mpd_root) => PathBuf::from(mpd_root),
-                        None => UserDirs::new().ok_or(Error::MissingHomeDir)?.audio_dir().ok_or(Error::MissingMusicDir)?.to_owned(),
-                    });
+                    *mpd_root = Some(get_mpd_root()?);
                 }
                 mpd_root.as_ref().unwrap().join(&path)
             })
@@ -70,10 +78,7 @@ fn get_tracks(mpd_root: Arc<Mutex<Option<PathBuf>>>, path: PathBuf) -> Pin<Box<d
         } else {
             lock!(mpd_root = mpd_root; {
                 if mpd_root.is_none() {
-                    *mpd_root = Some(match env::var_os("MPD_ROOT") {
-                        Some(mpd_root) => PathBuf::from(mpd_root),
-                        None => UserDirs::new().ok_or(Error::MissingHomeDir)?.audio_dir().ok_or(Error::MissingMusicDir)?.to_owned(),
-                    });
+                    *mpd_root = Some(get_mpd_root()?);
                 }
                 stream::once(future::ok(absolute_path.strip_prefix(mpd_root.as_ref().unwrap())?.to_owned())).boxed()
             })
@@ -87,9 +92,18 @@ struct Args {
     subcommand: Option<Subcommand>,
 }
 
+fn path_completer() -> ArgValueCompleter {
+    let mut completer = PathCompleter::any();
+    if let Ok(mpd_root) = get_mpd_root() {
+        completer = completer.current_dir(mpd_root);
+    }
+    ArgValueCompleter::new(completer)
+}
+
 #[derive(clap::Subcommand)]
 enum Subcommand {
     AddShuffled {
+        #[clap(add = path_completer())]
         path: PathBuf,
     },
     List,
