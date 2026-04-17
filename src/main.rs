@@ -24,6 +24,8 @@ use {
             TryStreamExt as _,
         },
     },
+    itertools::Itertools as _,
+    lazy_regex::regex_captures,
     log_lock::*,
     path_slash::PathBufExt as _,
     percent_encoding::percent_decode_str,
@@ -32,21 +34,50 @@ use {
         rng,
     },
     tokio::io::{
-        self,
         AsyncBufReadExt as _,
         BufReader,
     },
     tokio_stream::wrappers::LinesStream,
-    wheel::fs::{
-        self,
-        File,
+    wheel::{
+        fs::{
+            self,
+            File,
+        },
+        traits::IoResultExt as _,
     },
 };
+#[cfg(windows)] use directories::BaseDirs;
+
+fn get_mpd_conf() -> Option<PathBuf> {
+    #[cfg(windows)] {
+        let path = BaseDirs::new()?.data_local_dir().join("mpd").join("mpd.conf");
+        if path.exists() { return Some(path) }
+        let path = UserDirs::new()?.home_dir().join(".config").join("mpd").join("mpd.conf");
+        if path.exists() { return Some(path) }
+    }
+    #[cfg(not(windows))] {
+        if let Some(path) = xdg::BaseDirectories::new().find_config_file("mpd/mpd.conf") { return Some(path) }
+    }
+    let path = UserDirs::new()?.home_dir().join(".mpdconf");
+    if path.exists() { return Some(path) }
+    let path = UserDirs::new()?.home_dir().join(".mpd/mpd.conf");
+    if path.exists() { return Some(path) }
+    None
+}
 
 fn get_mpd_root() -> Result<PathBuf, Error> {
-    Ok(match env::var_os("MPD_ROOT") {
-        Some(mpd_root) => PathBuf::from(mpd_root),
-        None => UserDirs::new().ok_or(Error::MissingHomeDir)?.audio_dir().ok_or(Error::MissingMusicDir)?.to_owned(),
+    use std::io::prelude::*;
+
+    Ok(if let Some(mpd_root) = env::var_os("MPD_ROOT") {
+        PathBuf::from(mpd_root)
+    } else if let Some(conf) = get_mpd_conf()
+        && let Some(music_dir) = std::io::BufReader::new(std::fs::File::open(&conf).at(&conf)?)
+            .lines()
+            .process_results(|mut lines| lines.find_map(|line| regex_captures!("^ *music_directory +\"(.+)\" *$", &line).map(|(_, music_dir)| music_dir.into()))).at(conf)?
+    {
+        music_dir
+    } else {
+        UserDirs::new().ok_or(Error::MissingHomeDir)?.audio_dir().ok_or(Error::MissingMusicDir)?.to_owned()
     })
 }
 
@@ -65,7 +96,8 @@ fn get_tracks(mpd_root: Arc<Mutex<Option<PathBuf>>>, path: PathBuf) -> Pin<Box<d
         Ok::<_, Error>(if fs::metadata(&absolute_path).await?.is_dir() {
             fs::read_dir(absolute_path).and_then(move |entry| future::ok(get_tracks(mpd_root.clone(), entry.path()))).try_flatten().boxed()
         } else if absolute_path.extension().is_some_and(|ext| ext == "m3u8") {
-            LinesStream::new(BufReader::new(File::open(absolute_path).await?).lines())
+            LinesStream::new(BufReader::new(File::open(&absolute_path).await?).lines())
+                .map(move |res| res.at(&absolute_path))
                 .map_err(Error::from)
                 .map_ok(|line| line.trim().to_owned())
                 .try_filter(|line| future::ready(!line.is_empty() && !line.starts_with('#')))
@@ -75,6 +107,8 @@ fn get_tracks(mpd_root: Arc<Mutex<Option<PathBuf>>>, path: PathBuf) -> Pin<Box<d
                 })
                 .try_flatten()
                 .boxed()
+        } else if absolute_path.file_name().is_some_and(|filename| filename == "desktop.ini") {
+            stream::empty().boxed()
         } else {
             lock!(mpd_root = mpd_root; {
                 if mpd_root.is_none() {
@@ -111,7 +145,6 @@ enum Subcommand {
 
 #[derive(Debug, thiserror::Error)]
 enum Error {
-    #[error(transparent)] Io(#[from] io::Error),
     #[error(transparent)] Mpd(#[from] async_mpd::Error),
     #[error(transparent)] StripPrefix(#[from] std::path::StripPrefixError),
     #[error(transparent)] Utf8(#[from] std::str::Utf8Error),
