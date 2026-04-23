@@ -4,7 +4,7 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 use {
     std::{
         env,
-        net::Ipv6Addr,
+        net::Ipv4Addr,
         path::PathBuf,
         pin::Pin,
         sync::Arc,
@@ -160,7 +160,7 @@ enum Error {
 #[wheel::main]
 async fn main(Args { subcommand }: Args) -> Result<(), Error> {
     let mut mpc = MpdClient::new();
-    mpc.connect((Ipv6Addr::LOCALHOST, 6600)).await?;
+    mpc.connect((Ipv4Addr::LOCALHOST, 6600)).await?; // IPv4 has better compat than IPv6
     match subcommand {
         Some(Subcommand::AddShuffled { path }) => {
             let mut tracks = get_tracks(Arc::default(), path).try_collect::<Vec<_>>().await?;
