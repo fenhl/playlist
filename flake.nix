@@ -17,7 +17,7 @@
             pkgs = import attrs.nixpkgs {
                 inherit system;
                 overlays = [
-                    attrs.rust-overlay.overlays.default # required for night-updater-android
+                    attrs.rust-overlay.overlays.default
                 ];
             };
         });
