@@ -7,6 +7,10 @@ use {
         net::Ipv4Addr,
         path::PathBuf,
         pin::Pin,
+        process::{
+            Command,
+            Stdio,
+        },
         sync::Arc,
     },
     async_mpd::MpdClient,
@@ -43,7 +47,10 @@ use {
             self,
             File,
         },
-        traits::IoResultExt as _,
+        traits::{
+            IoResultExt as _,
+            SyncCommandOutputExt as _,
+        },
     },
 };
 #[cfg(windows)] use directories::BaseDirs;
@@ -56,6 +63,15 @@ fn get_mpd_conf() -> Option<PathBuf> {
         if path.exists() { return Some(path) }
     }
     #[cfg(not(windows))] {
+        //TODO get config from `systemctl --user show mpd.service --property=ExecStart`
+        if let Ok(exec_start) = Command::new("systemctl").arg("--user").arg("show").arg("mpd.service").arg("--property=ExecStart").stdout(Stdio::piped()).check("systemctl show")
+        && let Ok(exec_start) = String::from_utf8(exec_start.stdout)
+        && let Some((_, attrs)) = regex_captures!(r"^ExecStart=\{ (.*) \}$", exec_start.trim())
+        && let Some(argv) = attrs.split(" ; ").find_map(|attr| attr.strip_prefix("argv[]="))
+        && let Some(argv) = shlex::split(argv)
+        && let Some(argv) = argv.get(1..)
+        && let Ok(path) = argv.iter().filter(|arg| !arg.starts_with('-')).exactly_one()
+        { return Some(path.into()) }
         if let Some(path) = xdg::BaseDirectories::new().find_config_file("mpd/mpd.conf") { return Some(path) }
     }
     let path = UserDirs::new()?.home_dir().join(".mpdconf");
