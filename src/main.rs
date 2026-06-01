@@ -7,10 +7,6 @@ use {
         net::Ipv4Addr,
         path::PathBuf,
         pin::Pin,
-        process::{
-            Command,
-            Stdio,
-        },
         sync::Arc,
     },
     async_mpd::MpdClient,
@@ -47,13 +43,17 @@ use {
             self,
             File,
         },
-        traits::{
-            IoResultExt as _,
-            SyncCommandOutputExt as _,
-        },
+        traits::IoResultExt as _,
     },
 };
 #[cfg(windows)] use directories::BaseDirs;
+#[cfg(not(windows))] use {
+    std::process::{
+        Command,
+        Stdio,
+    },
+    wheel::traits::SyncCommandOutputExt as _,
+};
 
 fn get_mpd_conf() -> Option<PathBuf> {
     #[cfg(windows)] {

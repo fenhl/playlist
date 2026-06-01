@@ -31,11 +31,13 @@ mimalloc = "0.1"
 path-slash = "0.2"
 percent-encoding = "2"
 rand = "0.9"
-shlex = "2"
 thiserror = "2"
 tokio = { version = "1", features = ["io-util"] }
 tokio-stream = { version = "0.1", features = ["io-util"] }
 wheel = { git = "https://github.com/fenhl/wheel" }
+
+[target."cfg(not(windows))".dependencies]
+shlex = "2"
 
 [target."cfg(unix)".dependencies]
 xdg = "3"
