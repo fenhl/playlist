@@ -4,6 +4,7 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 use {
     std::{
         env,
+        io::prelude::*,
         net::Ipv4Addr,
         path::PathBuf,
         pin::Pin,
@@ -34,6 +35,7 @@ use {
         rng,
     },
     tokio::io::{
+        self,
         AsyncBufReadExt as _,
         BufReader,
     },
@@ -185,9 +187,16 @@ async fn main(Args { subcommand }: Args) -> Result<(), Error> {
                 mpc.queue_add(&track.to_slash().ok_or(Error::NonUtf8TrackPath)?).await?;
             }
         }
-        None | Some(Subcommand::List) => for track in mpc.queue().await? {
-            println!("{}", track.file);
-        },
+        None | Some(Subcommand::List) => {
+            let mut lock = std::io::stdout().lock();
+            for track in mpc.queue().await? {
+                match writeln!(lock, "{}", track.file) {
+                    Ok(()) => {}
+                    Err(e) if e.kind() == io::ErrorKind::BrokenPipe => break,
+                    Err(e) => return Err(e).at_unknown().map_err(Error::from),
+                }
+            }
+        }
     }
     Ok(())
 }
